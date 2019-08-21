@@ -21,7 +21,7 @@
     "description": { "default": "TEST" },
     "officeFabricIconFontName": "Page",
     "properties": {
-      "description": "TestPart"
+      "description": ""
     }
   }]
 }
