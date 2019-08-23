@@ -1,0 +1,30 @@
+/* IE Change */
+#slider.IE .nivo-imageLink img,
+#slider.IE .nivo-main-image{
+  height:100% !important;
+  object-fit: cover;
+  opacity: 0;
+  position: absolute !important;
+  top: -50000000px;
+}
+
+#slider.IE .nivo-imageLink{
+  overflow:hidden;
+  opacity: 1 !important;
+}
+#slider.IE .slider-item-image {
+  opacity: 0 !important;
+  display: none !important;
+  position: absolute;
+  top: -5000000px;
+}
+
+#slider.IE .slider-item-image-wrapper {
+
+  height: 100%!important;
+    background-size: cover;
+    background-position: 50% 50%;
+    background-repeat: no-repeat;
+}
+
+

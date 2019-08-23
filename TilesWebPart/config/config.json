@@ -11,7 +11,10 @@
       ]
     }
   },
-  "externals": {},
+  "externals": {
+    "jquery": "node_modules/jquery/dist/jquery.js",
+    "jquery.nivo.slider": "node_modules/nivo-slider/jquery.nivo.slider.js"
+  },
   "localizedResources": {
     "TestPartWebPartStrings": "lib/webparts/testPart/loc/{locale}.js"
   }

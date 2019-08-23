@@ -15,13 +15,31 @@
   "supportedHosts": ["SharePointWebPart"],
 
   "preconfiguredEntries": [{
-    "groupId": "5c03119e-3074-46fd-976b-c60198311f70", // Other
-    "group": { "default": "Other" },
-    "title": { "default": "TestPart" },
-    "description": { "default": "TEST" },
+    "groupId": "5c03119e-3074-46fd-976b-c60198311f70", 
+    "group": { "default": "Dummy" },
+    "title": { "default": "Image Rotator" },  
+    "description": { "default": "Image Rotator is a plugin based on the Nivo Slider plugin for JQuery. This plugin allows you to show Images and link them to SharePoint items" },
+    "iconImageUrl": "https://cdn3.iconfinder.com/data/icons/galaxy-open-line-iii/200/backup-restore-512.png", 
     "officeFabricIconFontName": "Page",
     "properties": {
-      "description": ""
+      "description": " Image Rotator", 
+      "TitleFieldName": "Title",
+      "TeaserFieldsName": "Teaser",
+      "ImageFieldName": "Image",
+      "ArticleLinkFieldName": "ArticleLink",
+      "ListName": "IRC",
+      "SiteURL": "",
+      "ViewName": "All Items",
+      "MaxCharInTeaser":200,
+      "NumberOfitems": 3,
+      "ShowNavigationButton":true,
+      "RotationSpeed": "4000",
+      "Height": "400",
+      "Width": "700",
+      "externalCssFile": "",
+      "JsomScriptBaseURL": "",
+      "EnableResponsive": false,
+      "ShowThumbnails":true
     }
   }]
 }

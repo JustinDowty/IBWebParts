@@ -1,119 +1,207 @@
-import { Version, Log } from '@microsoft/sp-core-library';
+import { Version } from '@microsoft/sp-core-library';
 import {
   BaseClientSideWebPart,
   IPropertyPaneConfiguration,
-  PropertyPaneTextField
+  PropertyPaneTextField,
+  PropertyPaneCheckbox,
+  PropertyPaneDropdown,
+  PropertyPaneChoiceGroup
 } from '@microsoft/sp-webpart-base';
-import { escape } from '@microsoft/sp-lodash-subset';
 
+import { SPComponentLoader } from '@microsoft/sp-loader';
+import * as jQuery from 'jquery';
+
+import { IWebPartProps } from './models';
+import ListService from './services/listService';
+import DomService from './services/domService';
+import { NavigatorService } from './services/navigatorService';
+import { ListFieldParseService } from './services/listFieldParseService';
 import styles from './TestPartWebPart.module.scss';
 import * as strings from 'TestPartWebPartStrings';
+import '../../../node_modules/nivo-slider/jquery.nivo.slider.js';
+require('../../../node_modules/nivo-slider/nivo-slider.css')
+require('./assets/styles.css');
+require('./assets/stylesIE.css');
 
-import * as $ from 'jquery';
-require("slick-carousel");
-require("./slick.css");
+export default class TestPartWebPart extends BaseClientSideWebPart<IWebPartProps> {
 
-export interface ITestPartWebPartProps {
-  description: string;
-  box1BgColor: string;
-  box1BgImage: string;
-  box1VideoUrl: string;
-  box1Url: string;
-  box2BgColor: string;
-  box2BgImage: string;
-  box2VideoUrl: string;
-  box2Url: string;
-  box3BgColor: string;
-  box3BgImage: string;
-  box3VideoUrl: string;
-  box3Url: string;
-  box4BgColor: string;
-  box4BgImage: string;
-  box4VideoUrl: string;
-  box4Url: string;
-  box5BgColor: string;
-  box5BgImage: string;
-  box5VideoUrl: string;
-  box5Url: string;
-  box6BgColor: string;
-  box6BgImage: string;
-  box6VideoUrl: string;
-  box6Url: string;
-  box7BgColor: string;
-  box7BgImage: string;
-  box7VideoUrl: string;
-  box7Url: string;
-  box8BgColor: string;
-  box8BgImage: string;
-  box8VideoUrl: string;
-  box8Url: string;
-  box9BgColor: string;
-  box9BgImage: string;
-  box9VideoUrl: string;
-  box9Url: string;
-  box10BgColor: string;
-  box10BgImage: string;
-  box10VideoUrl: string;
-  box10Url: string;
-}
+  private _navitgatorService: NavigatorService;
+  private _listService: ListService;
+  private _domService: DomService;
+  private _listFieldParseService: ListFieldParseService;
+  public _result: any[];
+  public _data: any[];
+  public _viewName: string;
 
-export default class TestPartWebPart extends BaseClientSideWebPart<ITestPartWebPartProps> {
-  
+
+  private _getAllViewsFromListAjaxCallError: string = '';
+  private _loadingExternalJSomScriptResult: any = {
+    isSuccess: true,
+    message: ''
+  };
+
+
   public render(): void {
-    this.setTestValues();
-    var boxes1 = this.getBoxes(10);
-    var boxes2 = this.getBoxes(10);
-    var boxes = boxes1.concat(boxes2);
-    var body = `<div class="${ styles.testPart }">
-                  <div class="${styles.container} slider">`;
-    for(let i = 0; i < boxes.length; i+=5) {
-      body += `<div class="${ styles.row }">
-                  <div class="${ styles.columnleft }">`
-                     + this.buildLargeBox(boxes[i]) +
-                  `</div>
-                  <div class="${ styles.columnright }">
-                      <div class="${ styles.boxrow}">`
-                        + this.buildSmallBox(boxes[i+1]) + this.buildSmallBox(boxes[i+2]) +
-                      `</div>
-                      <div class="${ styles.boxrow}">`
-                      + this.buildSmallBox(boxes[i+3]) + this.buildSmallBox(boxes[i+4]) +
-                    `</div>
-                  </div>
-                </div>`
-    }
-    body += `</div></div>`;
-    
-    this.domElement.innerHTML = `
-      <div class="${ styles.testPart }">
-        <div class="${styles.container} slider">`
-          + body +
-        `</div>
-      </div>`;
-  
-      ($ as any)('.slider').slick({
-        arrows: false,
-        dots: true
-      });
+    let self = this;
+    self.InjectDependency(function () {
+      // success callback
+      self.renderWebPartElement();
+      self.renderWebPartContent();
+    }, function (message: string) {
+      // error callback
+      self.renderWebPartElement();
+      self._domService.displayMessage(message, true);
+    });
+  }
+
+
+  // render only elements (slider content will render on next)
+  private renderWebPartElement(): void {
+    var self = this;
+    self.domElement.innerHTML = `<div id="${self._domService._imageRotatorAppHtmlElementId}"></div>`;
+    self._domService.renderWebPart(self.properties.IsBrowserIE);
+  }
+
+  //render Slider content with help of Rest API call / Jsom
+  private renderWebPartContent(): void {
+    var self = this;
+    // Rest API call to get List Item
+    this._listService.getAllListItem().then((data: any[]) => {
+      // render slider content from Rest api data (List data)
+      self._domService.renderSlideContentFromListData(data);
+
+      if (!self._loadingExternalJSomScriptResult.isSuccess && self._loadingExternalJSomScriptResult.message) {
+        let _loadingExternalJsomScriptfailed = `Loading Jsom Script Failed.You can edit loading url from web part properties(edit & reload).`;
+        self._domService.displayMessage(_loadingExternalJsomScriptfailed, false);
+      }
+    }).catch(err => {
+      var message: any = err;
+      if (message === 404) message = `List '${self.properties.ListName}' does not exist at site with URL '${self.context.pageContext.web.absoluteUrl}'`;
+      if (message === 400) message = `No Data : Inappropriate Request (fields or property might wrong)`;
+      self._domService.displayMessage(message, true);
+    });
+    return;
   }
 
   protected get dataVersion(): Version {
     return Version.parse('1.0');
   }
 
+  //initialize Jsom script , checking SP present or not  , Decide external jsom script Loading success or not 
+  protected onInit(): Promise<void> {
+
+    let self = this;
+
+    this._navitgatorService = new NavigatorService();
+    this.properties.IsBrowserIE = this._navitgatorService.isBrowserIE;
+    if (!this.properties.JsomScriptBaseURL) this.properties.JsomScriptBaseURL = self.context.pageContext.web.absoluteUrl;
+
+    return super.onInit();
+  }
+
+
+  /* Initialize and inject all dependent service (DomService, ListService , ListFieldParseService)
+   Load all available View with selected list to bind in View drop Down*/
+  private InjectDependency(succesCallback: any, errorCallback: any): void {
+
+    let self = this;
+    if (!self.properties.ListName) self.properties.ListName = 'DataList';
+    if (!self.properties.SiteURL) self.properties.SiteURL = self.context.pageContext.web.absoluteUrl;
+    if (!self.properties.ViewName) self.properties.ViewName = 'All Items';
+    if (!self.properties.SelectedViewName) self.properties.SelectedViewName = self.properties.ViewName;
+
+
+    // initialize and inject dependent ListFieldParseService class
+    self._listFieldParseService = new ListFieldParseService();
+
+    // initialize and inject dependent DomService : which is responssible for all rendering dom element
+    self._domService = new DomService(self.properties, self._listFieldParseService, self.context.pageContext.web.absoluteUrl);
+
+    // initialize and inject dependent ListService class with Initialized SP.ClientContext
+    self._listService = new ListService(self.properties.SiteURL, self.context.spHttpClient, self.properties, self._domService);
+
+
+    // load external css
+    if (self.properties.externalCssFile && self.properties.externalCssFile !== '') {
+      SPComponentLoader.loadCss(self.properties.externalCssFile);
+    }
+
+    // on success call back : will render the Dom element and dom content
+    succesCallback();
+  }
+
+  // set property pane
   protected getPropertyPaneConfiguration(): IPropertyPaneConfiguration {
     return {
       pages: [
         {
           header: {
-            description: strings.PropertyPaneDescription
+            description: "Image Rotator is a plugin based on the Nivo Slider plugin for JQuery. This plugin allows you to show Images and link them to SharePoint items"
           },
           groups: [
             {
               groupName: strings.BasicGroupName,
               groupFields: [
                 PropertyPaneTextField('description', {
-                  label: strings.DescriptionFieldLabel
+                  label: 'Description'
+                }),
+                PropertyPaneTextField('TitleFieldName', {
+                  label: 'Title Field '
+                }),
+                PropertyPaneTextField('TeaserFieldsName', {
+                  label: 'Teaser Fields '
+                }),
+                PropertyPaneTextField('ImageFieldName', {
+                  label: 'Image'
+                }),
+                PropertyPaneTextField('ArticleLinkFieldName', {
+                  label: 'Article Link'
+                }),
+                PropertyPaneTextField('ListName', {
+                  label: 'List Name'
+                }),
+                PropertyPaneTextField('SiteURL', {
+                  label: 'Site URL'
+                }),
+                PropertyPaneTextField('NumberOfitems', {
+                  label: 'Number Of Items'
+                }),
+                PropertyPaneTextField('MaxCharInTeaser', {
+                  label: 'Max Char In Teaser'
+                }),
+
+                PropertyPaneTextField('RotationSpeed', {
+                  label: 'Rotation Speed'
+                }),
+                PropertyPaneCheckbox('ShowNavigationButton', {
+                  checked: this.properties.ShowNavigationButton,  // navigation option change dynamically type : boolean
+                  text: 'Show Navigation Button'
+                }),
+                PropertyPaneTextField('Height', {
+                  label: 'Height'
+                }),
+                PropertyPaneTextField('Width', {
+                  label: 'Width'
+                }),
+                PropertyPaneTextField('externalCssFile', {
+                  label: 'External Css'
+                }),
+                PropertyPaneTextField('JsomScriptBaseURL', {
+                  label: 'Jsom Script BaseURL'
+                }),
+                PropertyPaneCheckbox('EnableResponsive', {
+                  checked: this.properties.EnableResponsive,
+                  text: 'Enable Responsive'
+                }),
+                PropertyPaneChoiceGroup('SelectNavigationOptions', {
+                  label: "Show Slider Navigation As",
+                  options: [
+                    { key: 'Thumnails', text: 'Thumnails', checked: true },
+                    { key: 'Bullet', text: 'Bullet' },
+                    { key: 'Number', text: 'Number' },
+                  ],
                 })
+                //#7 Refactor  : 
               ]
             }
           ]
@@ -122,84 +210,33 @@ export default class TestPartWebPart extends BaseClientSideWebPart<ITestPartWebP
     };
   }
 
-  private getBoxes(num){
-    var boxes = [];
-    for(let i = 1; i <= num; i++) {
-      let color = "box" + i + "BgColor";
-      let image = "box" + i + "BgImage";
-      let video = "box" + i + "VideoUrl";
-      let url = "box" + i + "Url";
-      let item = {
-        color: this.properties[color],
-        image: this.properties[image],
-        video: this.properties[video],
-        url: "www.google.com",
-        title: "Block Main Title",
-        subTitle: "I am a subtitle!"
+  protected get disableReactivePropertyChanges(): boolean {
+    return false;
+  }
+
+  // on change of Property value
+  protected onPropertyPaneFieldChanged(propertyPath: string, oldValue: any, newValue: any): void {
+
+    // when change Navigation option thumbnails, bullet, number
+    if (propertyPath === "SelectNavigationOptions") {
+
+      if (newValue === 'Thumnails') this.properties.ShowThumbnails = true;
+      else this.properties.ShowThumbnails = false;
+
+      if (newValue === 'Number') {
+        this.properties.ShowThumbnails = false;
+        this.properties.ShowNavigationNumber = true;
       }
-      boxes.push(item);
+      else {
+        this.properties.ShowNavigationNumber = false;
+      }
     }
-    return boxes;
-  }
 
-  private buildLargeBox(box) {
-    var largeBox = box.video != ''
-      ? `<div class="${styles.largeVidWrapper}"><iframe class="${styles.video}" src="${box.video}" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>` 
-      : `<a href="www.google.com" class="${ styles.box }">
-          <div class="${styles.content}">
-            <div class="${ styles.title }">${box.title}</div>
-            <div class="${ styles.subTitle }">${box.subTitle}</div>
-          </div>
-          <div style="background: ${box.color} url(${box.image})" class="${ styles.bg}"></div>
-        </a>`;
-    return largeBox;
-  }
+    if (propertyPath === "externalCssFile" && newValue !== '') {
+      SPComponentLoader.loadCss(this.properties.externalCssFile);
+    }
 
-  private buildSmallBox(box) {
-    var smallBox = box.video != ''
-      ? `<div class="$ ${ styles.box }">
-          <iframe class="${styles.video}"  src="${box.video}" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-        </div>`
-      : `<a href="www.google.com" class="${ styles.box }">
-          <div class="${styles.content}">
-            <div class="${ styles.smallTitle }">Welcome to SharePoint!</div>
-            <div class="${ styles.smallSubTitle }">${box.subTitle}</div>
-          </div>
-          <div style="background: ${box.color} url(${box.image})" class="${ styles.bg}"></div>
-        </a>`
-    return smallBox;
-  }
-
-  private setTestValues(){
-    this.properties.box1BgColor = '#172a54';
-    this.properties.box1BgImage = "http://fc02.deviantart.net/fs34/i/2008/304/3/d/Triforce_2_by_5995260108.png";
-    this.properties.box1VideoUrl = "";
-    this.properties.box2BgColor = '#172a54';
-    this.properties.box2BgImage = "#a8353a";
-    this.properties.box2VideoUrl = "https://www.youtube.com/embed/uAOR6ib95kQ";
-    this.properties.box3BgColor = '#172a54';
-    this.properties.box3BgImage = "http://fc02.deviantart.net/fs34/i/2008/304/3/d/Triforce_2_by_5995260108.png";
-    this.properties.box3VideoUrl = "";
-    this.properties.box4BgColor = "#a8353a";
-    this.properties.box4BgImage = "#a8353a";
-    this.properties.box4VideoUrl = "";
-    this.properties.box5BgColor = '#172a54';
-    this.properties.box5BgImage = "";
-    this.properties.box5VideoUrl = "";
-    this.properties.box6BgColor = '#172a54';
-    this.properties.box6BgImage  = "http://fc02.deviantart.net/fs34/i/2008/304/3/d/Triforce_2_by_5995260108.png";
-    this.properties.box6VideoUrl = "https://www.youtube.com/embed/uAOR6ib95kQ";
-    this.properties.box7BgColor = '#a8353a';
-    this.properties.box7BgImage = "";
-    this.properties.box7VideoUrl = "";
-    this.properties.box8BgColor = '#172a54';
-    this.properties.box8BgImage = '';
-    this.properties.box8VideoUrl = "";
-    this.properties.box9BgColor = '#172a54';
-    this.properties.box9BgImage = "";
-    this.properties.box9VideoUrl = "";
-    this.properties.box10BgColor = '#172a54';
-    this.properties.box10BgImage = "";
-    this.properties.box10VideoUrl = "https://www.youtube.com/embed/uAOR6ib95kQ";
+    super.onPropertyPaneFieldChanged(propertyPath, oldValue, newValue);
   }
 }
+
